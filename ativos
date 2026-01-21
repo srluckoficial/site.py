@@ -1,0 +1,71 @@
+import discord
+from discord.ext import commands, tasks
+from datetime import datetime, time
+import pytz, json, os
+
+class SistemaCargosAtivos(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.GUILDA_ID = 1449803169193394178
+        self.ID_CARGO_ATIVO = 1449816739683631338
+        self.ID_CARGO_SUPER_ATIVO = 1449811251990368338
+        self.arquivo_json = "dados.json"
+        self.resets.start()
+
+    def carregar_dados(self):
+        if os.path.exists(self.arquivo_json):
+            with open(self.arquivo_json, "r", encoding="utf-8") as f:
+                return json.load(f)
+        return {}
+
+    def salvar_dados(self, dados):
+        with open(self.arquivo_json, "w", encoding="utf-8") as f:
+            json.dump(dados, f, indent=4, ensure_ascii=False)
+
+    # Task rodando exatamente às 00:00:00 no horário de Brasília
+    @tasks.loop(time=time(hour=0, minute=0, second=0, tzinfo=pytz.timezone('America/Sao_Paulo')))
+    async def resets(self):
+        print(f"🕒 [LOG] Iniciando resets automáticos...")
+        dados = self.carregar_dados()
+        gid = str(self.GUILDA_ID)
+        fuso = pytz.timezone('America/Sao_Paulo')
+        hoje = datetime.now(fuso)
+        
+        if gid in dados:
+            # Reset DIÁRIO
+            for uid in dados[gid]["usuarios"]:
+                dados[gid]["usuarios"][uid]["msgs_hoje"] = 0
+            
+            # Reset MENSAL (Se for dia 1)
+            if hoje.day == 1:
+                print("📅 [LOG] Dia 1 detectado! Resetando mensal...")
+                for uid in dados[gid]["usuarios"]:
+                    dados[gid]["usuarios"][uid]["msgs_mensal"] = 0
+            
+            self.salvar_dados(dados)
+            print("✅ [LOG] JSON limpo com sucesso.")
+
+        # REMOÇÃO DE CARGOS NO DISCORD
+        guild = self.bot.get_guild(self.GUILDA_ID)
+        if guild:
+            cargos_para_remover = [
+                guild.get_role(self.ID_CARGO_ATIVO),
+                guild.get_role(self.ID_CARGO_SUPER_ATIVO)
+            ]
+            for cargo in cargos_para_remover:
+                if cargo:
+                    print(f"🧹 [LOG] Removendo cargo {cargo.name} de todos...")
+                    for member in cargo.members:
+                        try:
+                            await member.remove_roles(cargo, reason="Reset Diário de Atividade")
+                        except Exception as e:
+                            print(f"⚠️ Erro ao remover de {member.name}: {e}")
+        
+        print(f"🏁 [LOG] Processo de reset finalizado às {hoje.strftime('%H:%M:%S')}")
+
+    @resets.before_loop
+    async def before_resets(self):
+        await self.bot.wait_until_ready()
+
+async def setup(bot):
+    await bot.add_cog(SistemaCargosAtivos(bot))
