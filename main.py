@@ -149,7 +149,6 @@ def run_flask(bot):
     app.run(host='0.0.0.0', port=5000)
 
 # --- CLASSE DO BOT ---
-TOKEN = 'MTM5OTczMjAzMDUwNTM1MzMzNw.G9a8a5.C0VuT4obUiphQnpwRw3xqJ7NZ4s1Kq6aVKgOso'
 
 class MyBot(commands.Bot):
     def __init__(self):
